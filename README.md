@@ -1,6 +1,6 @@
 # Ordered Keyword Args for Python
 
-Normally, Python does’nt preserve the order of keyword arguments passed to a function. That’s because it uses a dictionary to pass the arguments, and Python’s dictionary doesn’t remember the order in which elements are added.
+Normally, Python doesn't preserve the order of keyword arguments passed to a function. That’s because it uses a dictionary to pass the arguments, and Python’s dictionary doesn’t remember the order in which elements are added.
 
 That’s a problem in certain situations. For instance, if you want to define data models for serialization:
 
