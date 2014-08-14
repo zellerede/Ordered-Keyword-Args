@@ -365,6 +365,15 @@ def parse_bytecode(bytes) :
 # StackInspector
 #
 
+def stack_pop(stack) :
+    #
+    # Allow stack underflow
+    # as the code block being processed
+    # might begin with an assumption of a non-empty stack
+    #
+    if len(stack) > 0 :
+        stack.pop()
+
 class StackInspector(object) :
     def __init__(self, code, target_offset) :
         self._code = code
@@ -391,7 +400,7 @@ class StackInspector(object) :
 
     def apply_pop_push(self, stack, pop, push) :
         for _ in range(pop) :
-            stack.pop()
+            stack_pop(stack)
         for _ in range(push) :
             stack.append(None)
 
@@ -430,15 +439,7 @@ class StackInspector(object) :
     def build_stack(self) :
         end = self._target_index
         begin = self.find_block_begin(end)
-
-        # HACK:
-        # The found beginning of the block
-        # may have the assumption of a non-empty stack.
-        # e.g: If call-site is either preceded by a list-comprehension
-        # or is inside a list-comprehension.
-        # So initialize the stack with 100 dummy element.
-        stack = [None]*100
-
+        stack = []
         for inst in self._instructions[begin:end] :
             self.apply_effect(inst, stack)
         return stack
@@ -457,9 +458,9 @@ class StackInspector(object) :
             required += 1
         assert len(stack) >= required
         if op.has_var :
-            stack.pop()
+            stack_pop(stack)
         if op.has_kw :
-            stack.pop()
+            stack_pop(stack)
         keyword_names = []
         for i in range(keyword_args) :
             j = keyword_args - i - 1
