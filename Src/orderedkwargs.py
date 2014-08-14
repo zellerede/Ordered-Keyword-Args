@@ -430,7 +430,15 @@ class StackInspector(object) :
     def build_stack(self) :
         end = self._target_index
         begin = self.find_block_begin(end)
-        stack = []
+
+        # HACK:
+        # The found beginning of the block
+        # may have the assumption of a non-empty stack.
+        # e.g: If call-site is either preceded by a list-comprehension
+        # or is inside a list-comprehension.
+        # So initialize the stack with 100 dummy element.
+        stack = [None]*100
+
         for inst in self._instructions[begin:end] :
             self.apply_effect(inst, stack)
         return stack
