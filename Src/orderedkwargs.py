@@ -378,23 +378,17 @@ def stack_pop(stack) :
 
 class StackInspector(object) :
     def __init__(self, code, target_offset) :
-        self._code = code
-        self._target_offset = target_offset
-        self._instructions = parse_bytecode(self._code.co_code)
-        self._offset_map = {}
-        for i, inst in enumerate(self._instructions) :
-            self._offset_map[inst.offset] = i
-        self._target_index = self._offset_map[self._target_offset]
-
-    def code(self) : return self._code
-    def target_offset(self) : return self._target_offset
-    def instructions(self) : return self._instructions
-    def offset_map(self) : return self._offset_map
-    def target_index(self) : return self._target_index
+        self.code = code
+        self.target_offset = target_offset
+        self.instructions = parse_bytecode(code.co_code)
+        self.offset_map = {}
+        for i, inst in enumerate(self.instructions) :
+            self.offset_map[inst.offset] = i
+        self.target_index = self.offset_map[self.target_offset]
 
     def find_block_begin(self, index) :
         while index > 0 :
-            prev = self._instructions[index - 1]
+            prev = self.instructions[index - 1]
             if isinstance(opcode_info[prev.name], SpecialOp) :
                 break
             index -= 1
@@ -428,7 +422,7 @@ class StackInspector(object) :
 
     def apply_effect(self, inst, stack) :
         if inst.opcode == LOAD_CONST :
-            stack.append(self._code.co_consts[inst.argument])
+            stack.append(self.code.co_consts[inst.argument])
             return
         op = opcode_info[inst.name]
         if isinstance(op, StackOp) :
@@ -439,16 +433,16 @@ class StackInspector(object) :
             assert False
 
     def build_stack(self) :
-        end = self._target_index
+        end = self.target_index
         begin = self.find_block_begin(end)
         stack = []
-        for inst in self._instructions[begin:end] :
+        for inst in self.instructions[begin:end] :
             self.apply_effect(inst, stack)
         return stack
 
     def find_keyword_names(self) :
         stack = self.build_stack()
-        inst = self._instructions[self._target_index]
+        inst = self.instructions[self.target_index]
         op = opcode_info[inst.name]
         assert isinstance(op, CallOp)
         positional_args = inst.argument % 256
@@ -481,68 +475,15 @@ def orderedkwargs(f) :
         frame = caller[0]
         inspector = StackInspector(frame.f_code, frame.f_lasti)
         keywords = inspector.find_keyword_names()
+        all_args = inspect.getargspec(f)
+        default_names = all_args.args[-len(all_args.defaults):]
+        defaults = {}
         ordered_kwargs = OrderedDict()
         for key in keywords :
             value = kwargs.pop(key)
-            ordered_kwargs[key] = value
-        return preprocess(f)(___kw=ordered_kwargs, *args)
+            if key in default_names:
+                defaults[key] = value
+            else:
+                ordered_kwargs[key] = value
+        return f(*args, kwargs=ordered_kwargs, **defaults)
     return inner
-
-def preprocess(f):
-    '''a naive first try to patch the syntactic usage issue 
-       by source code modification'''
-    kwarg_name = inspect.getargspec(f).keywords
-    if not kwarg_name:  # no modification needed
-        return f
-    source = _Code_modificator(f, kwarg_name)
-    # to find out context (globals and locals) of current call's place
-    exec(source.code, globals(), locals())
-    return eval(source.name)
-
-    
-class _Code_modificator(object):
-    def __init__(self, f, kwarg_name):
-        self.kwarg_name = kwarg_name
-        self.read_code(f)
-        self.parse_headline()
-        self.eliminate_indents()
-        self.replace_kwarg_name()
-    
-    def read_code(self, f):
-        try:
-            self.code = ''.join( inspect.getsourcelines(f)[0] )
-        except IOError:
-            raise TypeError("Decorator @orderedkwargs can't recognize %r as method" % f)
-
-    def parse_headline(self):
-        m = re.match(r'(?:@\w+.*\n)?(\s*)def\s+(\w+)\s*\(', self.code)
-        if not m:
-            raise TypeError("Decorator @orderedkwargs can't read method header.\n%s" % self.code[:80])
-        (self.indent, self.name) = m.groups()
-        #parent_end = self.catch_parenthesis_end(start = m.end()-1)
-        #first_enter = parent_end + self.code[parent_end].index('\n')
-        #self.header = self.code[:first_enter]
-
-    def catch_parenthesis_end(self, start):
-        a = start
-        depth = 0
-        while (a < len(self.code)):
-            if '(' == self.code[a]:
-                depth += 1
-            elif ')' == self.code[a]: 
-                depth -= 1
-                if 0 == depth: return a
-            a += 1  
-    
-    def eliminate_indents(self):
-        if self.indent:
-            self.code = re.sub(r'^'+self.indent, '', self.code, flags=re.MULTILINE)
-            self.indent = ''
-    
-    def replace_kwarg_name(self):
-        self.code = self.code.replace('**%s' % self.kwarg_name, '___kw', 1)
-        # ___kw needs to be put to first argument place.
-        self.code = self.code.replace(self.kwarg_name, '___kw')
-
-# test
-#s = 'def f(x #comment\n   \t   , y=({g(h(x)):h(x)}), #comment\nz = 42  \t ): # comment\n# no comment\n  puli\n'
