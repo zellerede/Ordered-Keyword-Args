@@ -2,6 +2,8 @@ import sys
 import struct
 import dis
 import inspect
+import re
+from collections import OrderedDict
 
 __all__ = [
     "orderedkwargs"
@@ -479,10 +481,59 @@ def orderedkwargs(f) :
         frame = caller[0]
         inspector = StackInspector(frame.f_code, frame.f_lasti)
         keywords = inspector.find_keyword_names()
-        ordered_args = list(args)
+        ordered_kwargs = OrderedDict()
         for key in keywords :
             value = kwargs.pop(key)
-            ordered_args.append((key, value))
-        ordered_args.extend(kwargs.items())
-        return f(*ordered_args)
+            ordered_kwargs.append((key, value))
+        return preprocess(f)(___kw=ordered_kwargs, *args)
     return inner
+
+def preprocess(f):
+    '''a naive first try to patch the syntactic usage issue 
+       by source code modification'''
+    source = _Code_modificator(f)
+    exec(source.code)
+    return eval(source.name)
+
+    
+class _Code_modificator(object):
+    def __init__(self, f):
+        self.read_code(f)
+        self.parse_headline()
+        self.eliminate_indents()
+        # make it OrderedDict
+    
+    def read_code(self, f):
+        try:
+            self.code = ''.join( inspect.getsourcelines(f)[0] )
+        except IOError:
+            raise TypeError("Decorator @orderedkwargs can't recognize %r as method" % f)
+
+    def parse_headline(self):
+        m = re.match(r'(\s*)def\s+(\w+)\s*\(', self.code)
+        if not m:
+            raise TypeError("Decorator @orderedkwargs can't read method header.\n%s" % self.code[:80])
+        (self.indent, self.name) = m.groups()
+        parent_end = self.catch_parenthesis_end(start = m.end()-1)
+        first_enter = parent_end + self.code[parent_end].index('\n')
+        self.header = self.code[:first_enter]
+
+    def catch_parenthesis_end(self, start):
+        a = start
+        depth = 0
+        while (a < len(self.code)):
+            if '(' == self.code[a]:
+                depth += 1
+            elif ')' == self.code[a]: 
+                depth -= 1
+                if 0 == depth: return a
+            a += 1  
+    
+    def eliminate_indents(self):
+        if self.indent:
+            self.code = re.sub(r'^'+self.indent, '', self.code, flags=re.MULTILINE)
+            self.indent = ''
+    
+
+# test
+#s = 'def f(x #comment\n   \t   , y=({g(h(x)):h(x)}), #comment\nz = 42  \t ): # comment\n# no comment\n  puli\n'
