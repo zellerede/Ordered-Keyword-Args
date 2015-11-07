@@ -1,6 +1,8 @@
 import sys
 sys.path.insert(1, '../Src')
-reload(sys.modules['orderedkwargs'])
+
+if 'orderedkwargs' in sys.modules:
+    reload(sys.modules['orderedkwargs'])
 from orderedkwargs import orderedkwargs
 
 @orderedkwargs
@@ -31,8 +33,26 @@ class A:
     def __repr__(self):
         return "an A object"
 
-
 a=A()
 a.func('Rufus', height=174, weight=82)
 a.func_with_args('Sam', params='A7', setup='Idle')
 a.func_with_args('John', 1, 2, 3, 4, cash='much', girls='many')
+
+
+# test with other name
+@orderedkwargs('fields')
+def medal(kwargs, fields):
+    print kwargs
+    print fields.items()
+    print
+
+medal(42, x=1, y=2, z=3)
+
+@orderedkwargs('fields')
+def define_record(record_name, fields, *args) :
+    print "record: %s" % (record_name,)
+    print "fields: %s" % (fields.items(),)
+    if args:
+        print "additional arguments:", args
+
+define_record("Point", 1, 2, 3, 4,  x="Int32", y="Int32")

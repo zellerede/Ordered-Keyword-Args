@@ -34,8 +34,25 @@ Thus, kwargs being an OrderedDict, apart from the method header, <i> all other i
 Now the output is:
 
     record: Point
-    fields: (('x', 'Int32'), ('y', 'Int32'))
+    fields: [('x', 'Int32'), ('y', 'Int32')]
 
+
+If you want to use other name as 'kwargs', just specify it in the decorator (once enough if unchanged).
+
+    @orderedkwargs('fields')
+    def define_record(record_name, fields, *args) :
+        print "record: %s" % (record_name,)
+        print "fields: %s" % (fields.items(),)
+        if args:
+            print "additional arguments:", args
+
+    define_record("Point", 1, 2, 3, 4, x="Int32", y="Int32")
+
+Now the output is:
+
+    record: Point
+    fields: [('x', 'Int32'), ('y', 'Int32')]
+    additional arguments: (1, 2, 3, 4)
 
 ## How it works
 
