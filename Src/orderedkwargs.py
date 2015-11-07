@@ -484,24 +484,29 @@ def orderedkwargs(f) :
         ordered_kwargs = OrderedDict()
         for key in keywords :
             value = kwargs.pop(key)
-            ordered_kwargs.append((key, value))
+            ordered_kwargs[key] = value
         return preprocess(f)(___kw=ordered_kwargs, *args)
     return inner
 
 def preprocess(f):
     '''a naive first try to patch the syntactic usage issue 
        by source code modification'''
-    source = _Code_modificator(f)
-    exec(source.code)
+    kwarg_name = inspect.getargspec(f).keywords
+    if not kwarg_name:  # no modification needed
+        return f
+    source = _Code_modificator(f, kwarg_name)
+    # to find out context (globals and locals) of current call's place
+    exec(source.code, globals(), locals())
     return eval(source.name)
 
     
 class _Code_modificator(object):
-    def __init__(self, f):
+    def __init__(self, f, kwarg_name):
+        self.kwarg_name = kwarg_name
         self.read_code(f)
         self.parse_headline()
         self.eliminate_indents()
-        # make it OrderedDict
+        self.replace_kwarg_name()
     
     def read_code(self, f):
         try:
@@ -510,13 +515,13 @@ class _Code_modificator(object):
             raise TypeError("Decorator @orderedkwargs can't recognize %r as method" % f)
 
     def parse_headline(self):
-        m = re.match(r'(\s*)def\s+(\w+)\s*\(', self.code)
+        m = re.match(r'(?:@\w+.*\n)?(\s*)def\s+(\w+)\s*\(', self.code)
         if not m:
             raise TypeError("Decorator @orderedkwargs can't read method header.\n%s" % self.code[:80])
         (self.indent, self.name) = m.groups()
-        parent_end = self.catch_parenthesis_end(start = m.end()-1)
-        first_enter = parent_end + self.code[parent_end].index('\n')
-        self.header = self.code[:first_enter]
+        #parent_end = self.catch_parenthesis_end(start = m.end()-1)
+        #first_enter = parent_end + self.code[parent_end].index('\n')
+        #self.header = self.code[:first_enter]
 
     def catch_parenthesis_end(self, start):
         a = start
@@ -534,6 +539,10 @@ class _Code_modificator(object):
             self.code = re.sub(r'^'+self.indent, '', self.code, flags=re.MULTILINE)
             self.indent = ''
     
+    def replace_kwarg_name(self):
+        self.code = self.code.replace('**%s' % self.kwarg_name, '___kw', 1)
+        # ___kw needs to be put to first argument place.
+        self.code = self.code.replace(self.kwarg_name, '___kw')
 
 # test
 #s = 'def f(x #comment\n   \t   , y=({g(h(x)):h(x)}), #comment\nz = 42  \t ): # comment\n# no comment\n  puli\n'
