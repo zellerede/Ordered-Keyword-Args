@@ -476,12 +476,14 @@ def orderedkwargs(f) :
         inspector = StackInspector(frame.f_code, frame.f_lasti)
         keywords = inspector.find_keyword_names()
         all_args = inspect.getargspec(f)
-        default_names = all_args.args[-len(all_args.defaults):]
+        num_of_defaults = ( 0 if all_args.defaults is None 
+                              else len(all_args.defaults) )
+        default_names = all_args.args[-num_of_defaults:]
         defaults = {}
         ordered_kwargs = OrderedDict()
         for key in keywords :
             value = kwargs.pop(key)
-            if key in default_names:
+            if key in default_names: # all_args.args:
                 defaults[key] = value
             else:
                 ordered_kwargs[key] = value
