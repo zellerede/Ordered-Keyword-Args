@@ -465,27 +465,51 @@ class StackInspector(object) :
         return keyword_names
 
 
+# module variable
+_kwargs_name = 'kwargs'
+
 #
 # orderedkwargs
 #
 
 def orderedkwargs(f) :
+    global _kwargs_name
+    
+    # setting _kwargs_name by  @orderedkwargs('fields')
+    if isinstance(f, str) : 
+        _kwargs_name = f
+        return orderedkwargs
+    
+    all_args = inspect.getargspec(f)
+    if _kwargs_name not in all_args.args :
+        return f
+    
+    kwargs_pos = all_args.args.index(_kwargs_name)
+    # num_of_befores = kwargs_pos
+    # args_before = all_args.args[:kwargs_pos]
+    
     def inner(*args, **kwargs) :
         caller = inspect.stack()[1]
         frame = caller[0]
         inspector = StackInspector(frame.f_code, frame.f_lasti)
         keywords = inspector.find_keyword_names()
-        all_args = inspect.getargspec(f)
-        num_of_defaults = ( 0 if all_args.defaults is None 
-                              else len(all_args.defaults) )
-        default_names = all_args.args[-num_of_defaults:]
+
         defaults = {}
         ordered_kwargs = OrderedDict()
         for key in keywords :
             value = kwargs.pop(key)
-            if key in default_names: # all_args.args:
+            if key in all_args.args :
                 defaults[key] = value
-            else:
+            else :
                 ordered_kwargs[key] = value
-        return f(*args, kwargs=ordered_kwargs, **defaults)
+        
+        if len(args) > len(all_args.args) :
+            # we have nonempty *args parameter section
+            args = list(args)
+            args.insert(kwargs_pos, ordered_kwargs)
+            return f(*args, **defaults)
+        
+        defaults[_kwargs_name] = ordered_kwargs
+        return f(*args, **defaults)
+    
     return inner
